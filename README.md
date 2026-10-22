@@ -84,9 +84,8 @@ Optional variables:
 
 Values from the real process environment override the secrets file.
 
-To find your numeric `chat_id`, send a message to the bot and run
-`../telegram-notifier/notify.py --chat-id`, or read it from
-`getUpdates` with any Telegram API client.
+To find your numeric `chat_id`, message [@userinfobot](https://t.me/userinfobot)
+on Telegram and copy the id it replies with.
 
 ## Run
 
