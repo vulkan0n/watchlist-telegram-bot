@@ -1,0 +1,25 @@
+# Install this file in ~/.config/systemd/user/:
+#   mkdir -p ~/.config/systemd/user
+#   cp systemd/watchlist-telegram-bot.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now watchlist-telegram-bot.service
+#
+# Adjust WorkingDirectory and ExecStart if you cloned this repository
+# somewhere other than ~/watchlist-telegram-bot. ExecStart must point to a
+# Python interpreter that has the watchlist-downloader dependencies installed
+# (or to .venv/bin/python if you created a virtual environment).
+
+[Unit]
+Description=Watchlist Telegram bot
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/watchlist-telegram-bot
+ExecStart=/usr/bin/python3 %h/watchlist-telegram-bot/bot.py
+Environment=PYTHONUNBUFFERED=1
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
