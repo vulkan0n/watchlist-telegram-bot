@@ -105,8 +105,10 @@ stay as reviewable work units on a feature branch instead of chained PRs.
 
 - T1-T3 complete in `watchlist-downloader` on `feat/headless-service`, commit
   `5036389`. `python3 -m pytest -q` -> 99 passed (90 baseline + 9 new).
-- T4-T11 complete in this repository on `feat/telegram-bot`, commit `1ee150b`.
-  `python3 -m pytest -q` -> 21 passed. `py_compile` and import checks pass.
+- T4-T11 complete in this repository. The development history was squashed into
+  the public initial commit so no personal identifiers remain in the remote
+  history. `python3 -m pytest -q` -> 21 passed. `py_compile` and import checks
+  pass.
 - RDD review for the refactor candidate was offered and declined by the user
   (`declined_this_candidate`); the candidate was not reviewed.
 - `~/.config/watchlist-telegram-bot/secrets.env` created with mode 600 and the
