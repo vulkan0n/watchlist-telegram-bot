@@ -24,10 +24,12 @@ class WatchlistPipeline:
         # Imported lazily so this module never requires the sibling package.
         from watchlist_downloader import service as service_module
         from watchlist_downloader import state_store as state_store_module
+        from watchlist_downloader import transmission_client as transmission_module
 
         self._config = config
         self._service = service_module
         self._state_store = state_store_module
+        self._transmission = transmission_module
 
     def list_available(self) -> list[Any]:
         """Return available, not-yet-downloaded movies with torrents."""
@@ -51,3 +53,10 @@ class WatchlistPipeline:
             movies,
             transmission_url=self._config.transmission_url,
         )
+
+    def list_status(self) -> list[Any]:
+        """Return the progress of every torrent currently in Transmission."""
+        client = self._transmission.TransmissionClient(
+            url=self._config.transmission_url
+        )
+        return client.list_torrents()

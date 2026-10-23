@@ -83,12 +83,23 @@ class FakePipeline:
         movies: list[Any] | None = None,
         results: list[tuple[Any, bool]] | None = None,
         error: BaseException | None = None,
+        statuses: list[Any] | None = None,
+        status_error: BaseException | None = None,
     ) -> None:
         self.movies = movies or []
         self.results = results
         self.error = error
+        self.statuses = statuses or []
+        self.status_error = status_error
         self.list_calls = 0
+        self.status_calls = 0
         self.download_calls: list[list[Any]] = []
+
+    def list_status(self) -> list[Any]:
+        self.status_calls += 1
+        if self.status_error is not None:
+            raise self.status_error
+        return list(self.statuses)
 
     def list_available(self) -> list[Any]:
         self.list_calls += 1
@@ -107,9 +118,11 @@ def make_handlers(
     movies: list[Any] | None = None,
     results: list[tuple[Any, bool]] | None = None,
     error: BaseException | None = None,
+    statuses: list[Any] | None = None,
+    status_error: BaseException | None = None,
 ) -> tuple[BotHandlers, FakeAPI, FakePipeline, SessionStore]:
     api = FakeAPI()
-    pipeline = FakePipeline(movies, results, error)
+    pipeline = FakePipeline(movies, results, error, statuses, status_error)
     sessions = SessionStore()
     handlers = BotHandlers(api, pipeline, sessions, ALLOWED_CHAT)
     return handlers, api, pipeline, sessions
@@ -318,3 +331,67 @@ def test_callback_from_unauthorized_chat_is_acknowledged_without_action() -> Non
     assert len(api.calls) == 1
     assert api.calls[0]["method"] == "answer_callback_query"
     assert sessions.get(ALLOWED_CHAT) is not None
+
+
+# ── /status ───────────────────────────────────────────────────────────
+
+
+def make_status(
+    name: str,
+    percent_done: float,
+    status: str = "downloading",
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        name=name,
+        percent_done=percent_done,
+        status=status,
+        eta_seconds=None,
+        rate_download=0,
+        rate_upload=0,
+        ratio=0.0,
+    )
+
+
+def test_status_command_lists_progress() -> None:
+    statuses = [
+        make_status("Downloading Movie", 0.42, "downloading"),
+        make_status("Done Movie", 1.0, "completed"),
+    ]
+    handlers, api, pipeline, _ = make_handlers(statuses=statuses)
+
+    handlers.handle_update(message_update(ALLOWED_CHAT, "/status"))
+
+    assert pipeline.status_calls == 1
+    assert api.calls[0]["method"] == "send_message"
+    text = api.calls[-1]["text"]
+    assert "42%" in text
+    assert "100%" in text
+    assert "Downloading Movie" in text
+    assert "Done Movie" in text
+
+
+def test_status_command_alias_and_empty() -> None:
+    handlers, api, _, _ = make_handlers(statuses=[])
+
+    handlers.handle_update(message_update(ALLOWED_CHAT, "/estado"))
+
+    assert "No hay torrents" in api.calls[-1]["text"]
+
+
+def test_status_command_reports_transmission_failure() -> None:
+    handlers, api, _, _ = make_handlers(status_error=RuntimeError("down"))
+
+    handlers.handle_update(message_update(ALLOWED_CHAT, "/status"))
+
+    assert "No pude consultar Transmission" in api.calls[-1]["text"]
+
+
+def test_status_command_ignores_unauthorized_chat() -> None:
+    handlers, api, pipeline, _ = make_handlers(
+        statuses=[make_status("Movie", 0.5)]
+    )
+
+    handlers.handle_update(message_update(OTHER_CHAT, "/status"))
+
+    assert api.calls == []
+    assert pipeline.status_calls == 0

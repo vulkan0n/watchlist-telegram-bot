@@ -98,6 +98,8 @@ Available commands:
 - `/start` or `/help` — show usage.
 - `/lista` (aliases `/watchlist` and `/pelis`) — fetch and show available
   movies, 8 per page.
+- `/status` (alias `/estado`) — show the download progress of every torrent in
+  Transmission.
 - Tap a movie to toggle `☐` / `☑`, use `◀` and `▶` to page, then press
   `Descargar` to confirm or `Cancelar` to discard the selection.
 

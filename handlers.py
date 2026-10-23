@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from keyboard import PAGE_SIZE, build_keyboard, clamp_page
+from keyboard import PAGE_SIZE, build_keyboard, clamp_page, truncate_label
 from session import ChatSession, SessionStore
 
 logger = logging.getLogger(__name__)
@@ -23,12 +23,66 @@ DOWNLOAD_ERROR_TEXT = (
 HELP_TEXT = (
     "Comandos disponibles:\n"
     "/lista — ver películas disponibles\n"
+    "/status — ver el progreso de las descargas\n"
     "/help — mostrar esta ayuda"
 )
 UNKNOWN_COMMAND_TEXT = (
     "Comando desconocido. Envía /help para ver la ayuda."
 )
 EMPTY_KEYBOARD = {"inline_keyboard": []}
+
+STATUS_QUERYING_TEXT = "⏳ Consultando Transmission…"
+STATUS_EMPTY_TEXT = "No hay torrents en Transmission."
+STATUS_ERROR_TEXT = "⚠️ No pude consultar Transmission. ¿Está corriendo?"
+STATUS_MAX_LINES = 20
+
+_STATUS_EMOJI = {
+    "downloading": "⬇️",
+    "completed": "✅",
+    "paused": "⏸️",
+    "checking": "🔄",
+    "seeding": "✅",
+    "unknown": "•",
+}
+_STATUS_ORDER = {
+    "downloading": 0,
+    "checking": 1,
+    "paused": 2,
+    "seeding": 3,
+    "completed": 4,
+    "unknown": 5,
+}
+
+
+def format_status(torrents: list[Any]) -> str:
+    """Render a compact progress list for the /status command."""
+    if not torrents:
+        return STATUS_EMPTY_TEXT
+
+    ordered = sorted(
+        torrents,
+        key=lambda torrent: (
+            _STATUS_ORDER.get(torrent.status, 9),
+            -torrent.percent_done,
+            torrent.name.lower(),
+        ),
+    )
+    count = len(ordered)
+    lines = [
+        f"📊 Transmission — {count} torrent{'s' if count != 1 else ''}",
+        "",
+    ]
+    for torrent in ordered[:STATUS_MAX_LINES]:
+        percent = max(0, min(100, int(torrent.percent_done * 100)))
+        filled = percent // 10
+        bar = "█" * filled + "░" * (10 - filled)
+        emoji = _STATUS_EMOJI.get(torrent.status, "•")
+        lines.append(
+            f"{emoji} {percent:3d}% {bar} {truncate_label(torrent.name, 36)}"
+        )
+    if count > STATUS_MAX_LINES:
+        lines.append(f"… y {count - STATUS_MAX_LINES} más")
+    return "\n".join(lines)
 
 
 def _summary_text(count: int) -> str:
@@ -111,6 +165,8 @@ class BotHandlers:
             self._api.send_message(chat_id, HELP_TEXT)
         elif command in {"lista", "watchlist", "pelis"}:
             self._start_list(chat_id)
+        elif command in {"status", "estado"}:
+            self._start_status(chat_id)
         else:
             self._api.send_message(chat_id, UNKNOWN_COMMAND_TEXT)
 
@@ -137,6 +193,22 @@ class BotHandlers:
         session = ChatSession(movies=movies, message_id=message_id)
         self._sessions.put(chat_id, session)
         self._render(chat_id, session, _summary_text(len(movies)))
+
+    def _start_status(self, chat_id: int) -> None:
+        """Report the progress of every torrent in Transmission."""
+        placeholder = self._api.send_message(chat_id, STATUS_QUERYING_TEXT)
+        message_id = _message_id(placeholder)
+        try:
+            torrents = self._pipeline.list_status()
+        except Exception:  # noqa: BLE001 - report failures to the user
+            logger.exception("Failed to query Transmission")
+            self._edit_or_send(
+                chat_id, message_id, STATUS_ERROR_TEXT, EMPTY_KEYBOARD
+            )
+            return
+        self._edit_or_send(
+            chat_id, message_id, format_status(torrents), EMPTY_KEYBOARD
+        )
 
     def _handle_callback(self, callback: dict) -> None:
         callback_id = callback.get("id", "")
